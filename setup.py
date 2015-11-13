@@ -5,12 +5,6 @@
 
 import os
 from distutils.core import setup
-
-this_dir = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(this_dir, 'README.md')) as f:
-    LONG_DESCRIPTION = '\n' + f.read()
-
-
 from testingbotclient import __version__
 
 
@@ -21,7 +15,7 @@ setup(
     author='TestingBot',
     author_email='info _at_ testingbot.com',
     description='Python client library for TestingBot API.',
-    long_description=LONG_DESCRIPTION,
+    long_description='Update test details on TestingBot.com with this library. Set success state/name of test after running the Selenium test.',
     url='https://github.com/testingbot/testingbotclient',
     download_url='http://pypi.python.org/pypi/testingbotclient',
     keywords='testingbot selenium testing'.split(),
