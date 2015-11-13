@@ -12,4 +12,4 @@ class TestTestingBotClient(unittest.TestCase):
         self.assertEqual(self.tb.user.get_user_information()['first_name'], "travisbot")
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main()
