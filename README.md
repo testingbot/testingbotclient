@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/testingbot/testingbotclient.svg?branch=master)](https://travis-ci.org/testingbot/testingbotclient)
+
 # testingbotclient
 
 Python client for TestingBot REST API
