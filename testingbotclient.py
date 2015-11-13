@@ -6,7 +6,7 @@ import json
 import os
 __version__ = '0.0.2'
 
-is_py2 = sys.version_info.major is 2
+is_py2 = sys.version_info[0] is 2
 
 if is_py2:
     import httplib as http_client
