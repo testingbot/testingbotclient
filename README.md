@@ -31,7 +31,45 @@ It is also possible to use `TESTINGBOT_KEY` and `TESTINGBOT_SECRET` environment 
 ## Running tests
 
 This library is only intended to query the TestingBot API.
-To run Selenium RC/WebDriver tests with Python, please see [Python WebDriver Examples](http://testingbot.com/support/getting-started/python.html)
+Below is a simple example which runs a Selenium Webdriver test on TestingBot and reports its name/success state back to TestingBot via this library:
+
+```python
+import unittest
+import sys
+
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from testingbotclient import TestingBotClient
+
+class TestTestingBotClient(unittest.TestCase):
+
+    def setUp(self):
+		desired_cap = {'platform': 'Windows', 'browserName': 'firefox', 'version': '35' }
+
+		self.driver = webdriver.Remote(
+		    command_executor='http://key:secret@hub.testingbot.com/wd/hub',
+		    desired_capabilities=desired_cap)
+
+    def test_google_example(self):
+		self.driver.get("http://www.google.com")
+		if not "Google" in self.driver.title:
+		    raise Exception("Unable to load google page!")
+		elem = self.driver.find_element_by_name("q")
+		elem.send_keys("TestingBot")
+		elem.submit()
+
+    def tearDown(self):
+		self.driver.quit()
+		status = sys.exc_info() == (None, None, None)
+		tb_client = TestingBotClient('key', 'secret')
+		tb_client.tests.update_test(self.driver.session_id, self._testMethodName, status)
+
+if __name__ == '__main__':
+    unittest.main()
+```
+
+For more information on running Selenium RC/WebDriver tests with Python, please see [Python WebDriver Examples](http://testingbot.com/support/getting-started/python.html)
 
 
 ## More documentation
