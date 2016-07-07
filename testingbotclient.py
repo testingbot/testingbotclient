@@ -4,7 +4,7 @@ import base64
 import sys
 import json
 import os
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 is_py2 = sys.version_info[0] is 2
 
@@ -61,7 +61,7 @@ class TestingBotClient(object):
         connection.close()
         if response.status != 200:
             raise TestingBotException('Failed to contact TestingBot API: %s | %s' %
-                                 (response.status, response.reason))
+                                 (response.status, "/v1" + url))
         return json_data
 
     def get_encoded_auth_string(self):
