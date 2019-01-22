@@ -45,7 +45,7 @@ from testingbotclient import TestingBotClient
 class TestTestingBotClient(unittest.TestCase):
 
     def setUp(self):
-		desired_cap = {'platform': 'Windows', 'browserName': 'firefox', 'version': '35' }
+		desired_cap = {'platform': 'Windows', 'browserName': 'firefox', 'version': 'latest' }
 
 		self.driver = webdriver.Remote(
 		    command_executor='http://key:secret@hub.testingbot.com/wd/hub',
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     unittest.main()
 ```
 
-For more information on running Selenium RC/WebDriver tests with Python, please see [Python WebDriver Examples](http://testingbot.com/support/getting-started/python.html)
+For more information on running Selenium RC/WebDriver tests with Python, please see [Python WebDriver Examples](https://testingbot.com/support/getting-started/python.html)
 
 
 ## More documentation
