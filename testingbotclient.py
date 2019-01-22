@@ -4,7 +4,7 @@ import base64
 import sys
 import json
 import os
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 is_py2 = sys.version_info[0] is 2
 
@@ -66,8 +66,7 @@ class TestingBotClient(object):
 
     def get_encoded_auth_string(self):
         auth_info = '%s:%s' % (self.testingbotKey, self.testingbotSecret)
-        base64string = base64.b64encode(auth_info.encode(encoding='UTF-8')).decode(encoding='UTF-8')
-        return base64string
+        return base64.b64encode(auth_info.encode('utf-8')).decode('utf-8')
 
 
 class Tests(object):

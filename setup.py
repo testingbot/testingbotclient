@@ -4,16 +4,16 @@
 
 
 import os
-from distutils.core import setup
+import setuptools
 from testingbotclient import __version__
 
 
-setup(
+setuptools.setup(
     name='testingbotclient',
     version=__version__,
     py_modules=['testingbotclient'],
     author='TestingBot',
-    author_email='info _at_ testingbot.com',
+    author_email='info@testingbot.com',
     description='Python client library for TestingBot API.',
     long_description='Update test details on TestingBot.com with this library. Set success state/name of test after running the Selenium test.',
     url='https://github.com/testingbot/testingbotclient',
