@@ -20,6 +20,9 @@ setuptools.setup(
     download_url='http://pypi.python.org/pypi/testingbotclient',
     keywords='testingbot selenium testing'.split(),
     license='Apache v2.0',
+    install_requires=[
+        'requests',
+    ],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
