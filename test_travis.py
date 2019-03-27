@@ -12,25 +12,25 @@ class TestTestingBotClient(unittest.TestCase):
         self.assertTrue(self.tb.user.get_user_information()['first_name'])
 
     def test_upload_file(self):
-    	response = self.tb.storage.upload_local_file("./tests/resources/sample.apk")
-    	self.assertTrue(response.get("app_url") != None)
+        response = self.tb.storage.upload_local_file("./tests/resources/sample.apk")
+        self.assertTrue(response.get("app_url") != None)
 
     def test_upload_remote_file(self):
         response = self.tb.storage.upload_remote_file("https://testingbot.com/appium/sample.apk")
         self.assertTrue(response.get("app_url") != None)
 
     def test_upload_and_delete_file(self):
-    	files = self.tb.storage.get_stored_files()
-    	current_count = files.get("meta").get("total")
-    	response = self.tb.storage.upload_local_file("./tests/resources/sample.apk")
-    	app_url = response.get("app_url")
-    	meta_data = self.tb.storage.get_stored_file(app_url)
-    	self.assertEqual(meta_data.get("app_url"), app_url)
+        files = self.tb.storage.get_stored_files()
+        current_count = files.get("meta").get("total")
+        response = self.tb.storage.upload_local_file("./tests/resources/sample.apk")
+        app_url = response.get("app_url")
+        meta_data = self.tb.storage.get_stored_file(app_url)
+        self.assertEqual(meta_data.get("app_url"), app_url)
 
-    	files = self.tb.storage.get_stored_files()
-    	self.assertEqual(files.get("meta").get("total"), current_count + 1)
+        files = self.tb.storage.get_stored_files()
+        self.assertEqual(files.get("meta").get("total"), current_count + 1)
 
-    	self.tb.storage.remove_file(app_url)
+        self.tb.storage.remove_file(app_url)
 
         try:
             self.tb.storage.get_stored_file(app_url)
