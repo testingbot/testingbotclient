@@ -36,10 +36,8 @@ class TestTestingBotClient(unittest.TestCase):
             self.tb.storage.get_stored_file(app_url)
         except testingbotclient.TestingBotException:
             pass
-        except Exception as e:
-           self.fail('Unexpected exception raised:', e)
         else:
-           self.fail('ExpectedException not raised')
+            self.fail('ExpectedException not raised')
 
     def test_get_test(self):
         sessionId = "6344353dcee24694bf39d5ee5e6e5b11"
