@@ -133,7 +133,7 @@ Deletes/stops a specific tunnel for the current user
 
 
 ```python
-testingbotclient.tunnel.delete_tunnel(sessionId)
+testingbotclient.tunnel.delete_tunnel(tunnelId)
 ```
 
 ### uploadToStorage - Local File
