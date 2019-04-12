@@ -154,7 +154,7 @@ Uploads a remote file to TestingBot Storage
 testingbotclient.storage.upload_remote_file(localFilePath)
 ```
 
-### getStorageFile
+### getStoredFile
 Retrieves meta-data from a previously stored file
 <https://testingbot.com/support/api#uploadfile>
 
@@ -163,13 +163,13 @@ Retrieves meta-data from a previously stored file
 testingbotclient.storage.get_stored_file(appUrl)
 ```
 
-### getStorageFiles
+### getStoredFiles
 Retrieves meta-data from previously stored files
 <https://testingbot.com/support/api#filelist>
 
 
 ```python
-testingbotclient.storage.get_stored_files(appUrl)
+testingbotclient.storage.get_stored_files(offset=0, limit=30)
 ```
 
 ### deleteStorageFile
