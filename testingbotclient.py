@@ -8,7 +8,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 import hashlib
 
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 class TestingBotException(Exception):
     def __init__(self, *args, **kwargs):
@@ -157,6 +157,24 @@ class Information(object):
         browsers = self.client.get(url)
         return browsers
 
+    def get_devices(self):
+        """Get details of all devices currently on TestingBot"""
+        url = '/devices'
+        devices = self.client.get(url)
+        return devices
+
+    def get_available_devices(self):
+        """Get details of all devices currently available on TestingBot"""
+        url = '/devices/available'
+        devices = self.client.get(url)
+        return devices
+
+    def get_device(self, deviceId):
+        """Get details of a specific device on TestingBot"""
+        url = '/devices/' + deviceId
+        device = self.client.get(url)
+        return device
+
 class Tunnel(object):
     def __init__(self, client):
         self.client = client
@@ -166,7 +184,7 @@ class Tunnel(object):
         return self.client.get('/tunnel/list')
 
     def delete_tunnel(self, tunnelId):
-        """Get TestingBot Tunnels currently running"""
+        """Delete a specific TestingBot Tunnel"""
         return self.client.delete('/tunnel/' + tunnelId)
 
 class Build(object):
@@ -179,6 +197,10 @@ class Build(object):
 
     def get_tests_for_build(self, buildId):
         """Get tests for a specific build"""
+        return self.client.get('/builds/' + buildId)
+
+    def delete_build(self, buildId):
+        """Delete a specific build"""
         return self.client.delete('/builds/' + buildId)
 
 
@@ -190,4 +212,10 @@ class User(object):
         """Access current user information"""
         url = '/user'
         info = self.client.get(url)
+        return info
+
+    def update_user_information(self, newUser):
+        """Update current user information"""
+        url = '/user'
+        info = self.client.put(url)
         return info

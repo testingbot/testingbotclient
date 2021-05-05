@@ -1,4 +1,3 @@
-[![Build Status](https://travis-ci.org/testingbot/testingbotclient.svg?branch=master)](https://travis-ci.org/testingbot/testingbotclient)
 [![PyPI version](https://badge.fury.io/py/testingbotclient.svg)](https://badge.fury.io/py/testingbotclient)
 
 # testingbotclient
@@ -13,7 +12,7 @@ pip install testingbotclient
 
 ## TestingBot
 [TestingBot](https://testingbot.com/) allows you to run Selenium tests in the cloud.
-With access to over +1500 different browser/device combinations, you can run your browser and mobile tests in parallel on the TestingBot Selenium grid.
+With access to over +2600 different browser/device combinations, you can run your browser and mobile tests in parallel on the TestingBot Grid.
 
 ## Getting Started
 
@@ -39,6 +38,30 @@ Retrieves collection of available browsers
 
 ```python
 testingbotclient.information.get_browsers()
+```
+
+### getDevices
+Retrieves collection of devices
+<https://testingbot.com/support/api#devices>
+
+```python
+testingbotclient.information.get_devices()
+```
+
+### getAvailableDevices
+Retrieves collection of devices currently available
+<https://testingbot.com/support/api#available-devices>
+
+```python
+testingbotclient.information.get_available_devices()
+```
+
+### getDevice
+Retrieves information for a specific device
+<https://testingbot.com/support/api#devicedetails>
+
+```python
+testingbotclient.information.get_device(deviceId)
 ```
 
 ### updateTest
@@ -109,6 +132,15 @@ Retrieves a collection of tests for a specific build
 testingbotclient.build.get_tests_for_build(buildId)
 ```
 
+### deleteBuild
+Deletes a specific build
+<https://testingbot.com/support/api#deletebuild>
+
+
+```python
+testingbotclient.build.delete_build(buildId)
+```
+
 ### getUserConfig
 Retrieves information about the current user
 <https://testingbot.com/support/api#user>
@@ -116,6 +148,15 @@ Retrieves information about the current user
 
 ```python
 testingbotclient.user.get_user_information()
+```
+
+### updateUser
+Updates information about the current user
+<https://testingbot.com/support/api#useredit>
+
+
+```python
+testingbotclient.user.update_user_information(userInformation)
 ```
 
 ### getTunnels
@@ -193,7 +234,7 @@ testingbotclient.get_share_link(sessionId)
 ## Test
 
 ```python
-python test_travis.py
+python tests/test_client.py
 ```
 
 ## More documentation
