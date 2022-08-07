@@ -44,6 +44,13 @@ class TestTestingBotClient(unittest.TestCase):
         test_meta = self.tb.tests.get_test(sessionId)
         self.assertEqual(test_meta.get("session_id"), sessionId)
 
+    def test_get_tests(self):
+        test_meta = self.tb.tests.get_tests(0, 6)
+        self.assertEqual(len(test_meta), 6)
+
+        test_meta = self.tb.tests.get_tests()
+        self.assertEqual(len(test_meta), 10)
+
     def test_update_test(self):
         sessionId = "6344353dcee24694bf39d5ee5e6e5b11"
         new_status_message = uuid.uuid4().hex.upper()[0:6]
