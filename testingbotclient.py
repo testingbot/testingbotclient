@@ -87,7 +87,7 @@ class Tests(object):
 
     def get_tests(self, offset = 0, limit = 30):
         """List all tests belonging to the user."""
-        url = '/tests?offset=' + str(offset) + '&limit=' + str(limit)
+        url = '/tests?offset=' + str(offset) + '&count=' + str(limit)
         tests = self.client.get(url)
         return tests["data"]
 
@@ -145,7 +145,7 @@ class Storage(object):
 
     def get_stored_files(self, offset = 0, limit = 30):
         """Retrieves all files previously uploaded to TestingBot Storage."""
-        return self.client.get("/storage/?limit=" + str(limit) + "&offset=" + str(offset))
+        return self.client.get("/storage/?count=" + str(limit) + "&offset=" + str(offset))
 
 class Information(object):
     def __init__(self, client):
@@ -193,7 +193,7 @@ class Build(object):
 
     def get_builds(self, offset = 0, limit = 30):
         """Get all builds"""
-        return self.client.get('/builds?offset=' + str(offset) + '&limit=' + str(limit))
+        return self.client.get('/builds?offset=' + str(offset) + '&count=' + str(limit))
 
     def get_tests_for_build(self, buildId):
         """Get tests for a specific build"""
