@@ -85,7 +85,7 @@ class Tests(object):
         test_ids = [attr['session_id'] for attr in tests['data']]
         return test_ids
 
-    def get_tests(self, offset = 0, limit = 30):
+    def get_tests(self, offset = 0, limit = 10):
         """List all tests belonging to the user."""
         url = '/tests?offset=' + str(offset) + '&count=' + str(limit)
         tests = self.client.get(url)
@@ -143,7 +143,7 @@ class Storage(object):
         """Removes a file previously uploaded to TestingBot Storage."""
         return self.client.delete("/storage/" + app_url.replace("tb://", ""))
 
-    def get_stored_files(self, offset = 0, limit = 30):
+    def get_stored_files(self, offset = 0, limit = 10):
         """Retrieves all files previously uploaded to TestingBot Storage."""
         return self.client.get("/storage/?count=" + str(limit) + "&offset=" + str(offset))
 
@@ -191,7 +191,7 @@ class Build(object):
     def __init__(self, client):
         self.client = client
 
-    def get_builds(self, offset = 0, limit = 30):
+    def get_builds(self, offset = 0, limit = 10):
         """Get all builds"""
         return self.client.get('/builds?offset=' + str(offset) + '&count=' + str(limit))
 
