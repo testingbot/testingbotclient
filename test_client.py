@@ -39,11 +39,6 @@ class TestTestingBotClient(unittest.TestCase):
         else:
             self.fail('ExpectedException not raised')
 
-    def test_get_test(self):
-        sessionId = "6344353dcee24694bf39d5ee5e6e5b11"
-        test_meta = self.tb.tests.get_test(sessionId)
-        self.assertEqual(test_meta.get("session_id"), sessionId)
-
     def test_get_tests(self):
         test_meta = self.tb.tests.get_tests(0, 6)
         self.assertEqual(len(test_meta), 6)
@@ -52,7 +47,8 @@ class TestTestingBotClient(unittest.TestCase):
         self.assertEqual(len(test_meta), 10)
 
     def test_update_test(self):
-        sessionId = "6344353dcee24694bf39d5ee5e6e5b11"
+        tests = self.tb.tests.get_tests(0, 1)
+        sessionId = tests[0]['session_id']
         new_status_message = uuid.uuid4().hex.upper()[0:6]
         self.tb.tests.update_test(sessionId, status_message=new_status_message)
         test_meta = self.tb.tests.get_test(sessionId)
