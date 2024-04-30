@@ -5,12 +5,11 @@
 
 import os
 import setuptools
-from testingbotclient import __version__
 
 
 setuptools.setup(
     name='testingbotclient',
-    version=__version__,
+    version='0.1.1',
     py_modules=['testingbotclient'],
     author='TestingBot',
     author_email='info@testingbot.com',

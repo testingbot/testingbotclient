@@ -8,8 +8,6 @@ import requests
 from requests.auth import HTTPBasicAuth
 import hashlib
 
-__version__ = '0.1.0'
-
 class TestingBotException(Exception):
     def __init__(self, *args, **kwargs):
         super(TestingBotException, self).__init__(*args)
