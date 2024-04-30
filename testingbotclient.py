@@ -8,7 +8,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 import hashlib
 
-__version__ = '0.0.9'
+__version__ = '0.1.0'
 
 class TestingBotException(Exception):
     def __init__(self, *args, **kwargs):
@@ -218,5 +218,5 @@ class User(object):
     def update_user_information(self, newUser):
         """Update current user information"""
         url = '/user'
-        info = self.client.put(url)
+        info = self.client.put(url, newUser)
         return info
