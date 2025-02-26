@@ -9,7 +9,7 @@ import setuptools
 
 setuptools.setup(
     name='testingbotclient',
-    version='0.1.1',
+    version='0.1.2',
     py_modules=['testingbotclient'],
     author='TestingBot',
     author_email='info@testingbot.com',
