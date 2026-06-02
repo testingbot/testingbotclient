@@ -14,7 +14,7 @@ class TestingBotException(Exception):
         self.response = kwargs.get('response')
 
 class TestingBotClient(object):
-    def __init__(self, testingbotKey=None, testingbotSecret=None):
+    def __init__(self, testingbotKey=None, testingbotSecret=None, timeout=60):
         self.testingbotKey = testingbotKey
         self.testingbotSecret = testingbotSecret
         if self.testingbotKey is None:
@@ -39,30 +39,31 @@ class TestingBotClient(object):
         self.tunnel = Tunnel(self)
         self.build = Build(self)
         self.api_url = 'https://api.testingbot.com/v1/'
+        self.timeout = timeout
 
     def post(self, url, data):
-        response = requests.post(self.api_url + url, data=data, auth=(self.testingbotKey, self.testingbotSecret))
+        response = requests.post(self.api_url + url, data=data, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
     def delete(self, url):
-        response = requests.delete(self.api_url + url, auth=(self.testingbotKey, self.testingbotSecret))
+        response = requests.delete(self.api_url + url, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
     def put(self, url, data):
-        response = requests.put(self.api_url + url, data=data, auth=(self.testingbotKey, self.testingbotSecret))
+        response = requests.put(self.api_url + url, data=data, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
     def get(self, url):
-        response = requests.get(self.api_url + url, auth=(self.testingbotKey, self.testingbotSecret))
+        response = requests.get(self.api_url + url, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
@@ -132,7 +133,8 @@ class Storage(object):
             response = requests.post(
                 self.client.api_url + "/storage",
                 files={'file': f},
-                auth=(self.client.testingbotKey, self.client.testingbotSecret)
+                auth=(self.client.testingbotKey, self.client.testingbotSecret),
+                timeout=self.client.timeout
             )
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
