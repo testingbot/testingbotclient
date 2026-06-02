@@ -1,18 +1,19 @@
-name: Upload Python Package to PyPI when a Release is Created
+name: Publish to PyPI and attach build artifacts to the release
 
 on:
   release:
-    types: [created]
+    types: [published]
 
 jobs:
   pypi-publish:
-    name: Publish release to PyPI
+    name: Build, publish to PyPI, attach to release
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/testingbotclient
     permissions:
-      id-token: write
+      id-token: write   # OIDC trusted publishing to PyPI
+      contents: write   # upload built artifacts to the GitHub release
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -25,3 +26,7 @@ jobs:
         run: python -m build
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Attach distributions to the GitHub release
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl dist/*.tar.gz --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
