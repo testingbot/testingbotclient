@@ -91,7 +91,7 @@ class Tests(object):
 
     def get_test(self, sessionId):
         """Get meta-data for a specific test"""
-        return self.client.get('/tests/' + sessionId)
+        return self.client.get('/tests/%s' % sessionId)
 
     def update_test(self, sessionId, name=None, passed=None, status_message=None, build=None):
         """Update attributes for the specified test."""
@@ -178,7 +178,7 @@ class Information(object):
 
     def get_device(self, deviceId):
         """Get details of a specific device on TestingBot"""
-        url = '/devices/' + deviceId
+        url = '/devices/%s' % deviceId
         device = self.client.get(url)
         return device
 
@@ -192,7 +192,7 @@ class Tunnel(object):
 
     def delete_tunnel(self, tunnelId):
         """Delete a specific TestingBot Tunnel"""
-        return self.client.delete('/tunnel/' + tunnelId)
+        return self.client.delete('/tunnel/%s' % tunnelId)
 
 class Build(object):
     def __init__(self, client):
@@ -204,11 +204,11 @@ class Build(object):
 
     def get_tests_for_build(self, buildId):
         """Get tests for a specific build"""
-        return self.client.get('/builds/' + buildId)
+        return self.client.get('/builds/%s' % buildId)
 
     def delete_build(self, buildId):
         """Delete a specific build"""
-        return self.client.delete('/builds/' + buildId)
+        return self.client.delete('/builds/%s' % buildId)
 
 
 class User(object):
