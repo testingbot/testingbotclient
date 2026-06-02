@@ -28,8 +28,8 @@ class TestingBotClient(object):
             path = os.path.join(os.path.expanduser('~'), '.testingbot')
             if os.path.exists(path):
                 f = open(path, 'r')
-                data = f.read()
-                self.testingbotKey, self.testingbotSecret = data.split(':')
+                data = f.read().strip()
+                self.testingbotKey, self.testingbotSecret = data.split(':', 1)
                 f.close()
 
         self.information = Information(self)
