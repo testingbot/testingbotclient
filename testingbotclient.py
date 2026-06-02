@@ -48,30 +48,32 @@ class TestingBotClient(object):
         self.build = Build(self)
         self.api_url = 'https://api.testingbot.com/v1/'
         self.timeout = timeout
+        self.session = requests.Session()
+        self.session.auth = (self.testingbotKey, self.testingbotSecret)
 
     def post(self, url, data):
-        response = requests.post(self.api_url + url, data=data, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
+        response = self.session.post(self.api_url + url, data=data, timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
     def delete(self, url):
-        response = requests.delete(self.api_url + url, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
+        response = self.session.delete(self.api_url + url, timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
     def put(self, url, data):
-        response = requests.put(self.api_url + url, data=data, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
+        response = self.session.put(self.api_url + url, data=data, timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
     def get(self, url):
-        response = requests.get(self.api_url + url, auth=(self.testingbotKey, self.testingbotSecret), timeout=self.timeout)
+        response = self.session.get(self.api_url + url, timeout=self.timeout)
         if response.status_code not in [200, 201]:
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
@@ -138,10 +140,9 @@ class Storage(object):
     def upload_local_file(self, filepath):
         """Uploads a local file to TestingBot Storage."""
         with open(filepath, 'rb') as f:
-            response = requests.post(
+            response = self.client.session.post(
                 self.client.api_url + "/storage",
                 files={'file': f},
-                auth=(self.client.testingbotKey, self.client.testingbotSecret),
                 timeout=self.client.timeout
             )
         if response.status_code not in [200, 201]:
