@@ -14,6 +14,23 @@ try:
 except ImportError:  # Python 2 fallback
     from urllib import urlencode
 
+try:
+    from importlib.metadata import version as _pkg_version, PackageNotFoundError
+except ImportError:  # Python < 3.8
+    _pkg_version = None
+    PackageNotFoundError = Exception
+
+
+def _user_agent():
+    """User-Agent identifying this client and its installed version."""
+    version = 'unknown'
+    if _pkg_version is not None:
+        try:
+            version = _pkg_version('testingbotclient')
+        except PackageNotFoundError:
+            pass
+    return 'testingbotclient/%s' % version
+
 
 def _csv(values):
     """Join a list/tuple into a comma-separated string; pass strings through."""
@@ -70,6 +87,7 @@ class TestingBotClient(object):
         self.timeout = timeout
         self.session = requests.Session()
         self.session.auth = (self.testingbotKey, self.testingbotSecret)
+        self.session.headers.update({'User-Agent': _user_agent()})
 
     def post(self, url, data=None, json_body=None, files=None):
         response = self.session.post(self.api_url + url, data=data, json=json_body, files=files, timeout=self.timeout)

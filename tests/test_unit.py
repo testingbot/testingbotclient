@@ -129,6 +129,11 @@ class TestClientCore(ClientTestCase):
         self.assertIsNotNone(c.session)
         self.assertEqual(c.session.auth, ('k', 's'))
 
+    def test_user_agent_header(self):
+        c = TestingBotClient('k', 's')
+        self.assertTrue(c.session.headers.get('User-Agent', '').startswith(
+            'testingbotclient/'))
+
     def test_non_2xx_raises(self):
         self.queue(403, {'error': 'readonly'})
         with self.assertRaises(TestingBotException):
