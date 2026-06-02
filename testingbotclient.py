@@ -79,7 +79,7 @@ class Tests(object):
     def get_test_ids(self):
         """List all tests sessionId's belonging to the user."""
         url = '/tests'
-        tests = self.client.get(method, url)
+        tests = self.client.get(url)
         test_ids = [attr['session_id'] for attr in tests['data']]
         return test_ids
 
