@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "testingbotclient"
+version = "0.1.2"
+description = "Python client library for the TestingBot REST API."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [{ name = "TestingBot", email = "info@testingbot.com" }]
+keywords = ["testingbot", "selenium", "appium", "webdriver", "testing"]
+dependencies = ["requests"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://testingbot.com/"
+Repository = "https://github.com/testingbot/testingbotclient"
+Documentation = "https://testingbot.com/support/api"
+
+[tool.setuptools]
+py-modules = ["testingbotclient"]
