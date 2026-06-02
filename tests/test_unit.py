@@ -134,6 +134,33 @@ class TestClientCore(ClientTestCase):
         self.assertTrue(c.session.headers.get('User-Agent', '').startswith(
             'testingbotclient/'))
 
+    def test_retry_adapter_configured(self):
+        c = TestingBotClient('k', 's', max_retries=4)
+        retries = c.session.get_adapter('https://api.testingbot.com/').max_retries
+        self.assertEqual(retries.total, 4)
+        self.assertIn(429, retries.status_forcelist)
+
+    def test_context_manager_returns_self(self):
+        with TestingBotClient('k', 's') as tb:
+            self.assertIsInstance(tb, TestingBotClient)
+
+    def test_close_closes_session(self):
+        c = TestingBotClient('k', 's')
+        closed = []
+        c.session.close = lambda: closed.append(True)
+        c.close()
+        self.assertEqual(closed, [True])
+
+    def test_paginate_dict_pages(self):
+        pages = iter([{'data': [1, 2]}, {'data': [3, 4]}, {'data': [5]}])
+        out = list(testingbotclient.paginate(lambda offset, limit: next(pages), limit=2))
+        self.assertEqual(out, [1, 2, 3, 4, 5])
+
+    def test_paginate_list_pages(self):
+        pages = iter([[1, 2], [3]])
+        out = list(testingbotclient.paginate(lambda offset, limit: next(pages), limit=2))
+        self.assertEqual(out, [1, 2, 3])
+
     def test_non_2xx_raises(self):
         self.queue(403, {'error': 'readonly'})
         with self.assertRaises(TestingBotException):
@@ -216,7 +243,12 @@ class TestTests(ClientTestCase):
 
     def test_get_test_skip_fields(self):
         self.client.tests.get_test('sess-1', skip_fields=['steps', 'thumbs'])
-        self.assertCall('GET', '/tests/sess-1?skip_fields=steps,thumbs')
+        self.assertCall('GET', '/tests/sess-1?skip_fields=steps%2Cthumbs')
+
+    def test_path_segment_encoded(self):
+        # A slash in an id must be encoded so it can't break out of the path
+        self.client.tests.get_test('a/b')
+        self.assertCall('GET', '/tests/a%2Fb')
 
     def test_create_test(self):
         self.queue(200, {'success': True})
@@ -290,7 +322,7 @@ class TestStorage(ClientTestCase):
 
     def test_get_stored_files(self):
         self.client.storage.get_stored_files()
-        self.assertCall('GET', '/storage/?count=10&offset=0')
+        self.assertCall('GET', '/storage/?offset=0&count=10')
 
     def test_upload_local_file(self):
         fd, path = tempfile.mkstemp(suffix='.apk')
@@ -431,7 +463,7 @@ class TestScreenshots(ClientTestCase):
 
     def test_get_screenshot_exclude_ids(self):
         self.client.screenshots.get_screenshot(7, exclude_ids=[1, 2])
-        self.assertCall('GET', '/screenshots/7?excludeIds=1,2')
+        self.assertCall('GET', '/screenshots/7?excludeIds=1%2C2')
 
     def test_take_screenshots(self):
         self.client.screenshots.take_screenshots(

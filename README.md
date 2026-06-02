@@ -32,10 +32,19 @@ tb = testingbotclient.TestingBotClient()
 ```
 
 An optional request timeout (seconds, default `60`) can be set; raise it for
-large Storage uploads:
+large Storage uploads. Transient failures (429 / 5xx) are retried automatically
+on idempotent requests — tune or disable with `max_retries` (default `3`):
 
 ```python
-tb = testingbotclient.TestingBotClient('key', 'secret', timeout=120)
+tb = testingbotclient.TestingBotClient('key', 'secret', timeout=120, max_retries=5)
+```
+
+The client pools connections via a `requests.Session`; use it as a context
+manager to close that session deterministically:
+
+```python
+with testingbotclient.TestingBotClient('key', 'secret') as tb:
+    tb.tests.get_tests()
 ```
 
 Every API method raises `testingbotclient.TestingBotException` on a non-2xx
@@ -47,6 +56,14 @@ try:
     tb.tests.get_test('does-not-exist')
 except testingbotclient.TestingBotException as e:
     print(e.response.status_code)
+```
+
+Use `paginate` to iterate over every item of a paginated list endpoint without
+managing offsets yourself:
+
+```python
+for build in testingbotclient.paginate(tb.build.get_builds):
+    print(build)
 ```
 
 API reference: <https://testingbot.com/support/api>

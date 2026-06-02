@@ -1,18 +1,24 @@
 #!/usr/bin/env python
 
-import base64
-import sys
-import json
-import os
-import requests
-from requests.auth import HTTPBasicAuth
+from __future__ import annotations
+
 import hashlib
+import os
 import time
+from typing import Any, Callable, Iterator, List, Optional, Union
+
+import requests
+from requests.adapters import HTTPAdapter
 
 try:
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, quote
 except ImportError:  # Python 2 fallback
-    from urllib import urlencode
+    from urllib import urlencode, quote
+
+try:
+    from urllib3.util.retry import Retry
+except ImportError:  # pragma: no cover
+    Retry = None
 
 try:
     from importlib.metadata import version as _pkg_version, PackageNotFoundError
@@ -20,8 +26,10 @@ except ImportError:  # Python < 3.8
     _pkg_version = None
     PackageNotFoundError = Exception
 
+__all__ = ['TestingBotClient', 'TestingBotException', 'paginate']
 
-def _user_agent():
+
+def _user_agent() -> str:
     """User-Agent identifying this client and its installed version."""
     version = 'unknown'
     if _pkg_version is not None:
@@ -32,11 +40,48 @@ def _user_agent():
     return 'testingbotclient/%s' % version
 
 
-def _csv(values):
+def _csv(values: Union[list, tuple, str]) -> str:
     """Join a list/tuple into a comma-separated string; pass strings through."""
     if isinstance(values, (list, tuple)):
         return ','.join(str(v) for v in values)
     return values
+
+
+def _seg(value: Any) -> str:
+    """URL-encode a single path segment (so ids/keys can't break the path)."""
+    return quote(str(value), safe='')
+
+
+def _query(params: dict) -> str:
+    """Build a '?a=b&c=d' query string, dropping keys whose value is None."""
+    clean = {k: v for k, v in params.items() if v is not None}
+    return ('?' + urlencode(clean)) if clean else ''
+
+
+def paginate(fetch: Callable[[int, int], Any], limit: int = 100) -> Iterator[Any]:
+    """Yield every item across a paginated list endpoint.
+
+    ``fetch(offset, limit)`` should call a list method, e.g.::
+
+        for test in paginate(tb.build.get_builds):
+            ...
+        for test in paginate(lambda o, n: tb.tests.get_tests(o, n)):
+            ...
+
+    Works whether the method returns the raw list or the full ``{data, meta}``
+    dict, and stops once a short (final) page is returned.
+    """
+    offset = 0
+    while True:
+        page = fetch(offset, limit)
+        items = page['data'] if isinstance(page, dict) and 'data' in page else page
+        if not items:
+            return
+        for item in items:
+            yield item
+        if len(items) < limit:
+            return
+        offset += len(items)
 
 
 class TestingBotException(Exception):
@@ -52,8 +97,10 @@ class TestingBotException(Exception):
             if headers is not None:
                 headers.pop('Authorization', None)
 
+
 class TestingBotClient(object):
-    def __init__(self, testingbotKey=None, testingbotSecret=None, timeout=60):
+    def __init__(self, testingbotKey: Optional[str] = None, testingbotSecret: Optional[str] = None,
+                 timeout: float = 60, max_retries: int = 3):
         self.testingbotKey = testingbotKey
         self.testingbotSecret = testingbotSecret
         if self.testingbotKey is None:
@@ -85,87 +132,101 @@ class TestingBotClient(object):
         self.lab = Lab(self)
         self.api_url = 'https://api.testingbot.com/v1/'
         self.timeout = timeout
+
         self.session = requests.Session()
         self.session.auth = (self.testingbotKey, self.testingbotSecret)
         self.session.headers.update({'User-Agent': _user_agent()})
+        # Retry transient failures. urllib3's default allowed-methods set excludes
+        # POST, so non-idempotent calls (create/trigger/upload) are never retried.
+        if Retry is not None:
+            retry = Retry(
+                total=max_retries,
+                backoff_factor=0.5,
+                status_forcelist=(429, 500, 502, 503, 504),
+                raise_on_status=False,
+            )
+            adapter = HTTPAdapter(max_retries=retry)
+            self.session.mount('https://', adapter)
+            self.session.mount('http://', adapter)
 
-    def post(self, url, data=None, json_body=None, files=None):
-        response = self.session.post(self.api_url + url, data=data, json=json_body, files=files, timeout=self.timeout)
-        if response.status_code not in [200, 201]:
+    def _handle(self, response) -> Any:
+        if response.status_code not in (200, 201):
             raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
                 response.status_code, response.text), response=response)
         return response.json()
 
-    def delete(self, url):
-        response = self.session.delete(self.api_url + url, timeout=self.timeout)
-        if response.status_code not in [200, 201]:
-            raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
-                response.status_code, response.text), response=response)
-        return response.json()
+    def post(self, url: str, data: Optional[dict] = None, json_body: Optional[dict] = None,
+             files: Optional[dict] = None) -> Any:
+        return self._handle(self.session.post(
+            self.api_url + url, data=data, json=json_body, files=files, timeout=self.timeout))
 
-    def put(self, url, data=None, json_body=None):
-        response = self.session.put(self.api_url + url, data=data, json=json_body, timeout=self.timeout)
-        if response.status_code not in [200, 201]:
-            raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
-                response.status_code, response.text), response=response)
-        return response.json()
+    def delete(self, url: str) -> Any:
+        return self._handle(self.session.delete(self.api_url + url, timeout=self.timeout))
 
-    def get(self, url):
-        response = self.session.get(self.api_url + url, timeout=self.timeout)
-        if response.status_code not in [200, 201]:
-            raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
-                response.status_code, response.text), response=response)
-        return response.json()
+    def put(self, url: str, data: Optional[dict] = None, json_body: Optional[dict] = None) -> Any:
+        return self._handle(self.session.put(
+            self.api_url + url, data=data, json=json_body, timeout=self.timeout))
 
-    def get_share_link(self, identifier):
+    def get(self, url: str) -> Any:
+        return self._handle(self.session.get(self.api_url + url, timeout=self.timeout))
+
+    def get_share_link(self, identifier: Union[int, str]) -> str:
         return hashlib.md5(("%s:%s:%s" % (self.testingbotKey, self.testingbotSecret, identifier)).encode('utf-8')).hexdigest()
+
+    def close(self) -> None:
+        """Close the underlying HTTP session and its pooled connections."""
+        self.session.close()
+
+    def __enter__(self) -> 'TestingBotClient':
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
 
 class Tests(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_test_ids(self):
+    def get_test_ids(self) -> List[str]:
         """List all tests sessionId's belonging to the user."""
-        url = '/tests'
-        tests = self.client.get(url)
-        test_ids = [attr['session_id'] for attr in tests['data']]
-        return test_ids
+        tests = self.client.get('/tests')
+        return [attr['session_id'] for attr in tests['data']]
 
-    def get_tests(self, offset=0, limit=10, since=None, browser_id=None,
-                  group=None, build=None, skip_fields=None):
+    def get_tests(self, offset: int = 0, limit: int = 10, since: Optional[int] = None,
+                  browser_id: Optional[Union[int, str]] = None, group: Optional[str] = None,
+                  build: Optional[str] = None, skip_fields: Optional[Union[list, str]] = None) -> list:
         """List tests, optionally filtered.
 
         since: UNIX timestamp -> only tests updated at/after it (poll-friendly).
         browser_id / group / build: narrow to a browser, tag, or build.
         skip_fields: comma list (or list) of fields to omit (e.g. 'logs,thumbs').
         """
-        params = {'offset': offset, 'count': limit}
-        if since is not None:
-            params['since'] = since
-        if browser_id is not None:
-            params['browser_id'] = browser_id
-        if group is not None:
-            params['group'] = group
-        if build is not None:
-            params['build'] = build
-        if skip_fields is not None:
-            params['skip_fields'] = _csv(skip_fields)
-        tests = self.client.get('/tests?' + urlencode(params))
+        params = {
+            'offset': offset,
+            'count': limit,
+            'since': since,
+            'browser_id': browser_id,
+            'group': group,
+            'build': build,
+            'skip_fields': _csv(skip_fields) if skip_fields is not None else None,
+        }
+        tests = self.client.get('/tests' + _query(params))
         return tests["data"]
 
-    def get_test(self, sessionId, skip_fields=None):
+    def get_test(self, sessionId: Union[int, str], skip_fields: Optional[Union[list, str]] = None) -> Any:
         """Get meta-data for a specific test.
 
         skip_fields: comma list (or list) of fields to omit from the response
         (e.g. 'steps,thumbs,logs').
         """
-        url = '/tests/%s' % sessionId
+        url = '/tests/%s' % _seg(sessionId)
         if skip_fields is not None:
-            url += '?skip_fields=%s' % _csv(skip_fields)
+            url += _query({'skip_fields': _csv(skip_fields)})
         return self.client.get(url)
 
-    def create_test(self, name, success=None, status_message=None, extra=None, build=None):
+    def create_test(self, name: str, success: Optional[bool] = None, status_message: Optional[str] = None,
+                    extra: Optional[str] = None, build: Optional[str] = None) -> Any:
         """Create a test record (for logging manual or external test results)."""
         test = {'name': name}
         if success is not None:
@@ -178,10 +239,11 @@ class Tests(object):
             test['build'] = build
         return self.client.post('/tests', json_body={'test': test})
 
-    def update_test(self, sessionId, name=None, passed=None, status_message=None, build=None):
+    def update_test(self, sessionId: Union[int, str], name: Optional[str] = None,
+                    passed: Optional[bool] = None, status_message: Optional[str] = None,
+                    build: Optional[str] = None) -> Any:
         """Update attributes for the specified test."""
         params = {}
-
         if status_message is not None:
             params['test[status_message]'] = status_message
         if name is not None:
@@ -191,43 +253,33 @@ class Tests(object):
         if build is not None:
             params['build'] = build
 
-        url = '/tests/%s' % sessionId
-        response = self.client.put(url, params)
+        response = self.client.put('/tests/%s' % _seg(sessionId), params)
         return response['success']
 
-    def delete_test(self, sessionId):
+    def delete_test(self, sessionId: Union[int, str]) -> Any:
         """Deletes a test."""
-        url = '/tests/%s' % sessionId
-        response = self.client.delete(url)
+        response = self.client.delete('/tests/%s' % _seg(sessionId))
         return response['success']
 
-    def stop_test(self, sessionId):
+    def stop_test(self, sessionId: Union[int, str]) -> Any:
         """Stops a test."""
-        url = '/tests/%s/stop' % sessionId
-        response = self.client.put(url, {})
+        response = self.client.put('/tests/%s/stop' % _seg(sessionId), {})
         return response['success']
+
 
 class Storage(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def upload_local_file(self, filepath):
+    def upload_local_file(self, filepath: str) -> Any:
         """Uploads a local file to TestingBot Storage."""
         with open(filepath, 'rb') as f:
-            response = self.client.session.post(
-                self.client.api_url + "/storage",
-                files={'file': f},
-                timeout=self.client.timeout
-            )
-        if response.status_code not in [200, 201]:
-            raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
-                response.status_code, response.text), response=response)
-        return response.json()
+            return self.client.post('/storage', files={'file': f})
 
-    def upload_remote_file(self, remoteUrl):
-        return self.client.post("/storage", { 'url': remoteUrl })
+    def upload_remote_file(self, remoteUrl: str) -> Any:
+        return self.client.post('/storage', {'url': remoteUrl})
 
-    def replace_local_file(self, app_url, filepath):
+    def replace_local_file(self, app_url: str, filepath: str) -> Any:
         """Replace the binary stored under an existing app_url with a local file.
 
         The app_url (tb://<appkey>) stays the same, so deployed CI configs keep
@@ -235,122 +287,109 @@ class Storage(object):
         """
         appkey = app_url.replace("tb://", "")
         with open(filepath, 'rb') as f:
-            return self.client.post('/storage/%s' % appkey, files={'file': f})
+            return self.client.post('/storage/%s' % _seg(appkey), files={'file': f})
 
-    def replace_remote_file(self, app_url, remoteUrl):
+    def replace_remote_file(self, app_url: str, remoteUrl: str) -> Any:
         """Replace the binary stored under an existing app_url from a remote URL."""
         appkey = app_url.replace("tb://", "")
-        return self.client.post('/storage/%s' % appkey, {'url': remoteUrl})
+        return self.client.post('/storage/%s' % _seg(appkey), {'url': remoteUrl})
 
-    def get_stored_file(self, app_url):
+    def get_stored_file(self, app_url: str) -> Any:
         """Retrieves meta-data for a file previously uploaded to TestingBot Storage."""
-        return self.client.get("/storage/" + app_url.replace("tb://", ""))
+        return self.client.get('/storage/%s' % _seg(app_url.replace("tb://", "")))
 
-    def remove_file(self, app_url):
+    def remove_file(self, app_url: str) -> Any:
         """Removes a file previously uploaded to TestingBot Storage."""
-        return self.client.delete("/storage/" + app_url.replace("tb://", ""))
+        return self.client.delete('/storage/%s' % _seg(app_url.replace("tb://", "")))
 
-    def get_stored_files(self, offset = 0, limit = 10):
+    def get_stored_files(self, offset: int = 0, limit: int = 10) -> Any:
         """Retrieves all files previously uploaded to TestingBot Storage."""
-        return self.client.get("/storage/?count=" + str(limit) + "&offset=" + str(offset))
+        return self.client.get('/storage/' + _query({'offset': offset, 'count': limit}))
+
 
 class Information(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_browsers(self, type=None):
+    def get_browsers(self, type: Optional[str] = None) -> Any:
         """Get details of all browsers currently supported on TestingBot.
 
         type: 'webdriver' (default) or 'rc' (legacy Selenium RC).
         """
-        url = '/browsers'
-        if type is not None:
-            url += '?type=%s' % type
-        browsers = self.client.get(url)
-        return browsers
+        return self.client.get('/browsers' + _query({'type': type}))
 
-    def get_devices(self, platform=None):
+    def get_devices(self, platform: Optional[str] = None) -> Any:
         """Get details of all devices currently on TestingBot.
 
         platform: filter to one OS family (android | ios | real_android | real_ios).
         """
-        url = '/devices'
-        if platform is not None:
-            url += '?platform=%s' % platform
-        devices = self.client.get(url)
-        return devices
+        return self.client.get('/devices' + _query({'platform': platform}))
 
-    def get_available_devices(self):
+    def get_available_devices(self) -> Any:
         """Get details of all devices currently available on TestingBot"""
-        url = '/devices/available'
-        devices = self.client.get(url)
-        return devices
+        return self.client.get('/devices/available')
 
-    def get_device(self, deviceId):
+    def get_device(self, deviceId: Union[int, str]) -> Any:
         """Get details of a specific device on TestingBot"""
-        url = '/devices/%s' % deviceId
-        device = self.client.get(url)
-        return device
+        return self.client.get('/devices/%s' % _seg(deviceId))
+
 
 class Tunnel(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_tunnels(self):
+    def get_tunnels(self) -> Any:
         """Get TestingBot Tunnels currently running"""
         return self.client.get('/tunnel/list')
 
-    def delete_tunnel(self, tunnelId):
+    def delete_tunnel(self, tunnelId: Union[int, str]) -> Any:
         """Delete a specific TestingBot Tunnel"""
-        return self.client.delete('/tunnel/%s' % tunnelId)
+        return self.client.delete('/tunnel/%s' % _seg(tunnelId))
+
 
 class Build(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_builds(self, offset = 0, limit = 10):
+    def get_builds(self, offset: int = 0, limit: int = 10) -> Any:
         """Get all builds"""
-        return self.client.get('/builds?offset=' + str(offset) + '&count=' + str(limit))
+        return self.client.get('/builds' + _query({'offset': offset, 'count': limit}))
 
-    def get_tests_for_build(self, buildId):
+    def get_tests_for_build(self, buildId: Union[int, str]) -> Any:
         """Get tests for a specific build"""
-        return self.client.get('/builds/%s' % buildId)
+        return self.client.get('/builds/%s' % _seg(buildId))
 
-    def delete_build(self, buildId):
+    def delete_build(self, buildId: Union[int, str]) -> Any:
         """Delete a specific build"""
-        return self.client.delete('/builds/%s' % buildId)
+        return self.client.delete('/builds/%s' % _seg(buildId))
 
 
 class User(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_user_information(self):
+    def get_user_information(self) -> Any:
         """Access current user information"""
-        url = '/user'
-        info = self.client.get(url)
-        return info
+        return self.client.get('/user')
 
-    def update_user_information(self, newUser):
+    def update_user_information(self, newUser: dict) -> Any:
         """Update current user information"""
-        url = '/user'
-        info = self.client.put(url, newUser)
-        return info
+        return self.client.put('/user', newUser)
 
 
 class Jobs(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_job(self, jobId):
+    def get_job(self, jobId: Union[int, str]) -> Any:
         """Get the status of an asynchronous job (e.g. a Codeless trigger).
 
         Once the job's status is 'FINISHED' the response also carries the
         run results.
         """
-        return self.client.get('/jobs/%s' % jobId)
+        return self.client.get('/jobs/%s' % _seg(jobId))
 
-    def wait_for_job(self, jobId, timeout=600, interval=5):
+    def wait_for_job(self, jobId: Union[int, str], timeout: float = 600, interval: float = 5) -> Any:
         """Poll a job until its status is 'FINISHED' and return it.
 
         Raises TestingBotException if it does not finish within timeout seconds.
@@ -365,21 +404,23 @@ class Jobs(object):
 
 
 class Screenshots(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_screenshots(self, offset=0, limit=10):
+    def get_screenshots(self, offset: int = 0, limit: int = 10) -> Any:
         """List the screenshot batches previously taken."""
-        return self.client.get('/screenshots?offset=%s&count=%s' % (offset, limit))
+        return self.client.get('/screenshots' + _query({'offset': offset, 'count': limit}))
 
-    def get_screenshot(self, screenshotId, exclude_ids=None):
+    def get_screenshot(self, screenshotId: Union[int, str],
+                       exclude_ids: Optional[Union[list, str]] = None) -> Any:
         """Get the per-browser results for a single screenshot batch."""
-        url = '/screenshots/%s' % screenshotId
+        url = '/screenshots/%s' % _seg(screenshotId)
         if exclude_ids is not None:
-            url += '?excludeIds=%s' % _csv(exclude_ids)
+            url += _query({'excludeIds': _csv(exclude_ids)})
         return self.client.get(url)
 
-    def take_screenshots(self, url, resolution, browsers, wait_time=0, full_page=None, callback_url=None):
+    def take_screenshots(self, url: str, resolution: str, browsers: list, wait_time: int = 0,
+                         full_page: Optional[bool] = None, callback_url: Optional[str] = None) -> Any:
         """Queue a cross-browser screenshot batch for a URL.
 
         browsers is a list of browser_id values (see information.get_browsers).
@@ -402,22 +443,24 @@ class Screenshots(object):
 
 
 class TeamManagement(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_concurrency(self):
+    def get_concurrency(self) -> Any:
         """Get allowed vs current concurrent session counts for the team."""
         return self.client.get('/team-management')
 
-    def get_users(self, offset=0, limit=10):
+    def get_users(self, offset: int = 0, limit: int = 10) -> Any:
         """List the sub-accounts in the team (admin only)."""
-        return self.client.get('/team-management/users?offset=%s&count=%s' % (offset, limit))
+        return self.client.get('/team-management/users' + _query({'offset': offset, 'count': limit}))
 
-    def get_user(self, userId):
+    def get_user(self, userId: Union[int, str]) -> Any:
         """Get a single team user."""
-        return self.client.get('/team-management/users/%s' % userId)
+        return self.client.get('/team-management/users/%s' % _seg(userId))
 
-    def create_user(self, email, password, first_name=None, last_name=None, concurrency=None, concurrency_physical=None):
+    def create_user(self, email: str, password: str, first_name: Optional[str] = None,
+                    last_name: Optional[str] = None, concurrency: Optional[int] = None,
+                    concurrency_physical: Optional[int] = None) -> Any:
         """Create a new sub-account in the team."""
         body = {'email': email, 'password': password}
         if first_name is not None:
@@ -430,8 +473,11 @@ class TeamManagement(object):
             body['concurrencyPhysical'] = concurrency_physical
         return self.client.post('/team-management/users', json_body=body)
 
-    def update_user(self, userId, first_name=None, last_name=None, email=None, password=None,
-                    credits=None, device_credits=None, concurrency=None, concurrency_physical=None):
+    def update_user(self, userId: Union[int, str], first_name: Optional[str] = None,
+                    last_name: Optional[str] = None, email: Optional[str] = None,
+                    password: Optional[str] = None, credits: Optional[int] = None,
+                    device_credits: Optional[int] = None, concurrency: Optional[int] = None,
+                    concurrency_physical: Optional[int] = None) -> Any:
         """Update a team user's profile and credit allocation."""
         body = {}
         if first_name is not None:
@@ -450,30 +496,32 @@ class TeamManagement(object):
             body['concurrency'] = concurrency
         if concurrency_physical is not None:
             body['concurrencyPhysical'] = concurrency_physical
-        return self.client.put('/team-management/users/%s' % userId, json_body=body)
+        return self.client.put('/team-management/users/%s' % _seg(userId), json_body=body)
 
-    def get_client_key(self, userId):
+    def get_client_key(self, userId: Union[int, str]) -> Any:
         """Get the API client key for a team user (admin only)."""
-        return self.client.get('/team-management/users/%s/client-key' % userId)
+        return self.client.get('/team-management/users/%s/client-key' % _seg(userId))
 
-    def reset_keys(self, userId):
+    def reset_keys(self, userId: Union[int, str]) -> Any:
         """Rotate the API key and secret for a team user."""
-        return self.client.post('/team-management/users/%s/reset-keys' % userId, json_body={})
+        return self.client.post('/team-management/users/%s/reset-keys' % _seg(userId), json_body={})
 
 
 class LabSuites(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_suites(self, offset=0, limit=10):
+    def get_suites(self, offset: int = 0, limit: int = 10) -> Any:
         """List your Codeless suites."""
-        return self.client.get('/labsuites?offset=%s&count=%s' % (offset, limit))
+        return self.client.get('/labsuites' + _query({'offset': offset, 'count': limit}))
 
-    def get_suite(self, suiteId):
+    def get_suite(self, suiteId: Union[int, str]) -> Any:
         """Get a single Codeless suite."""
-        return self.client.get('/labsuites/%s' % suiteId)
+        return self.client.get('/labsuites/%s' % _seg(suiteId))
 
-    def create_suite(self, name, cron=None, screenshot=None, video=None, idletimeout=None, screenresolution=None):
+    def create_suite(self, name: str, cron: Optional[str] = None, screenshot: Optional[bool] = None,
+                     video: Optional[bool] = None, idletimeout: Optional[int] = None,
+                     screenresolution: Optional[str] = None) -> Any:
         """Create a new Codeless suite."""
         suite = {'name': name}
         if cron is not None:
@@ -488,49 +536,52 @@ class LabSuites(object):
             suite['screenresolution'] = screenresolution
         return self.client.post('/labsuites', json_body={'suite': suite})
 
-    def delete_suite(self, suiteId):
+    def delete_suite(self, suiteId: Union[int, str]) -> Any:
         """Delete a Codeless suite (its tests are preserved)."""
-        return self.client.delete('/labsuites/%s' % suiteId)
+        return self.client.delete('/labsuites/%s' % _seg(suiteId))
 
-    def trigger(self, suiteId):
+    def trigger(self, suiteId: Union[int, str]) -> Any:
         """Queue every test in the suite for an immediate run; returns a job_id."""
-        return self.client.post('/labsuites/%s/trigger' % suiteId, json_body={})
+        return self.client.post('/labsuites/%s/trigger' % _seg(suiteId), json_body={})
 
-    def get_tests(self, suiteId, offset=0, limit=10):
+    def get_tests(self, suiteId: Union[int, str], offset: int = 0, limit: int = 10) -> Any:
         """List the Codeless tests attached to a suite."""
-        return self.client.get('/labsuites/%s/tests?offset=%s&count=%s' % (suiteId, offset, limit))
+        return self.client.get('/labsuites/%s/tests' % _seg(suiteId)
+                               + _query({'offset': offset, 'count': limit}))
 
-    def add_tests(self, suiteId, test_ids):
+    def add_tests(self, suiteId: Union[int, str], test_ids: Union[list, str]) -> Any:
         """Attach Codeless tests to a suite (list or comma-separated string)."""
-        return self.client.post('/labsuites/%s/tests' % suiteId, json_body={'test_ids': _csv(test_ids)})
+        return self.client.post('/labsuites/%s/tests' % _seg(suiteId), json_body={'test_ids': _csv(test_ids)})
 
-    def remove_test(self, suiteId, testId):
+    def remove_test(self, suiteId: Union[int, str], testId: Union[int, str]) -> Any:
         """Detach a Codeless test from a suite."""
-        return self.client.delete('/labsuites/%s/tests/%s' % (suiteId, testId))
+        return self.client.delete('/labsuites/%s/tests/%s' % (_seg(suiteId), _seg(testId)))
 
-    def get_browsers(self, suiteId):
+    def get_browsers(self, suiteId: Union[int, str]) -> Any:
         """Get the browsers a suite runs on."""
-        return self.client.get('/labsuites/%s/browsers' % suiteId)
+        return self.client.get('/labsuites/%s/browsers' % _seg(suiteId))
 
-    def set_browsers(self, suiteId, browser_ids):
+    def set_browsers(self, suiteId: Union[int, str], browser_ids: Union[list, str]) -> Any:
         """Replace the browser set for a suite (list or comma-separated string)."""
-        return self.client.post('/labsuites/%s/browsers' % suiteId, json_body={'browser_ids': _csv(browser_ids)})
+        return self.client.post('/labsuites/%s/browsers' % _seg(suiteId), json_body={'browser_ids': _csv(browser_ids)})
 
 
 class Lab(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_tests(self, offset=0, limit=10):
+    def get_tests(self, offset: int = 0, limit: int = 10) -> Any:
         """List your Codeless tests."""
-        return self.client.get('/lab?offset=%s&count=%s' % (offset, limit))
+        return self.client.get('/lab' + _query({'offset': offset, 'count': limit}))
 
-    def get_test(self, testId):
+    def get_test(self, testId: Union[int, str]) -> Any:
         """Get a single Codeless test."""
-        return self.client.get('/lab/%s' % testId)
+        return self.client.get('/lab/%s' % _seg(testId))
 
-    def create_test(self, name=None, url=None, cron=None, screenshot=None, video=None,
-                    idletimeout=None, screenresolution=None, ai_prompt=None, file=None):
+    def create_test(self, name: Optional[str] = None, url: Optional[str] = None, cron: Optional[str] = None,
+                    screenshot: Optional[bool] = None, video: Optional[bool] = None,
+                    idletimeout: Optional[int] = None, screenresolution: Optional[str] = None,
+                    ai_prompt: Optional[str] = None, file: Optional[str] = None) -> Any:
         """Create a new Codeless test.
 
         Provide a `url` (then set_steps afterwards), or import a Selenium IDE
@@ -573,7 +624,8 @@ class Lab(object):
             test['ai_prompt'] = ai_prompt
         return self.client.post('/lab', json_body={'test': test})
 
-    def update_test(self, testId, name=None, url=None, cron=None, enabled=None):
+    def update_test(self, testId: Union[int, str], name: Optional[str] = None, url: Optional[str] = None,
+                    cron: Optional[str] = None, enabled: Optional[bool] = None) -> Any:
         """Update a Codeless test's metadata."""
         test = {}
         if name is not None:
@@ -584,38 +636,40 @@ class Lab(object):
             test['cron'] = cron
         if enabled is not None:
             test['enabled'] = enabled
-        return self.client.put('/lab/%s' % testId, json_body={'test': test})
+        return self.client.put('/lab/%s' % _seg(testId), json_body={'test': test})
 
-    def delete_test(self, testId):
+    def delete_test(self, testId: Union[int, str]) -> Any:
         """Delete a Codeless test."""
-        return self.client.delete('/lab/%s' % testId)
+        return self.client.delete('/lab/%s' % _seg(testId))
 
-    def trigger(self, testId, url=None):
+    def trigger(self, testId: Union[int, str], url: Optional[str] = None) -> Any:
         """Run a Codeless test immediately; returns a job_id."""
         body = {}
         if url is not None:
             body['url'] = url
-        return self.client.post('/lab/%s/trigger' % testId, json_body=body)
+        return self.client.post('/lab/%s/trigger' % _seg(testId), json_body=body)
 
-    def trigger_all(self, url=None):
+    def trigger_all(self, url: Optional[str] = None) -> Any:
         """Run every Codeless test on the account; returns a job_id."""
         body = {}
         if url is not None:
             body['url'] = url
         return self.client.post('/lab/trigger_all', json_body=body)
 
-    def get_steps(self, testId, offset=0, limit=10):
+    def get_steps(self, testId: Union[int, str], offset: int = 0, limit: int = 10) -> Any:
         """List the recorded steps of a Codeless test."""
-        return self.client.get('/lab/%s/steps?offset=%s&count=%s' % (testId, offset, limit))
+        return self.client.get('/lab/%s/steps' % _seg(testId)
+                               + _query({'offset': offset, 'count': limit}))
 
-    def set_steps(self, testId, steps):
+    def set_steps(self, testId: Union[int, str], steps: list) -> Any:
         """Replace the steps of a Codeless test.
 
         steps is a list of dicts: {'order':, 'cmd':, 'locator':, 'value':}.
         """
-        return self.client.post('/lab/%s/steps' % testId, json_body={'steps': steps})
+        return self.client.post('/lab/%s/steps' % _seg(testId), json_body={'steps': steps})
 
-    def schedule(self, testId, type, day=None, hour=None, cron_format=None):
+    def schedule(self, testId: Union[int, str], type: str, day: Optional[str] = None,
+                 hour: Optional[str] = None, cron_format: Optional[str] = None) -> Any:
         """Set a Codeless test's schedule (type: once|daily|weekly|custom)."""
         body = {'type': type}
         if day is not None:
@@ -624,14 +678,15 @@ class Lab(object):
             body['hour'] = hour
         if cron_format is not None:
             body['cronFormat'] = cron_format
-        return self.client.post('/lab/%s/schedule' % testId, json_body=body)
+        return self.client.post('/lab/%s/schedule' % _seg(testId), json_body=body)
 
-    def add_alert(self, testId, kind, level, content):
+    def add_alert(self, testId: Union[int, str], kind: str, level: str, content: str) -> Any:
         """Add a failure alert (kind: EMAIL|API|SMS, level: IMMEDIATELY|DAILY)."""
-        return self.client.post('/lab/%s/alert' % testId,
+        return self.client.post('/lab/%s/alert' % _seg(testId),
                                 json_body={'kind': kind, 'level': level, 'content': content})
 
-    def update_alert(self, testId, kind=None, level=None, content=None):
+    def update_alert(self, testId: Union[int, str], kind: Optional[str] = None,
+                     level: Optional[str] = None, content: Optional[str] = None) -> Any:
         """Update the failure alert on a Codeless test."""
         body = {}
         if kind is not None:
@@ -640,44 +695,45 @@ class Lab(object):
             body['level'] = level
         if content is not None:
             body['content'] = content
-        return self.client.put('/lab/%s/alert' % testId, json_body=body)
+        return self.client.put('/lab/%s/alert' % _seg(testId), json_body=body)
 
-    def add_report(self, testId, email, cron=None):
+    def add_report(self, testId: Union[int, str], email: str, cron: Optional[str] = None) -> Any:
         """Add a recurring email report for a Codeless test."""
         body = {'email': email}
         if cron is not None:
             body['cron'] = cron
-        return self.client.post('/lab/%s/report' % testId, json_body=body)
+        return self.client.post('/lab/%s/report' % _seg(testId), json_body=body)
 
-    def update_report(self, testId, email=None, cron=None):
+    def update_report(self, testId: Union[int, str], email: Optional[str] = None,
+                      cron: Optional[str] = None) -> Any:
         """Update the email report config for a Codeless test."""
         body = {}
         if email is not None:
             body['email'] = email
         if cron is not None:
             body['cron'] = cron
-        return self.client.put('/lab/%s/report' % testId, json_body=body)
+        return self.client.put('/lab/%s/report' % _seg(testId), json_body=body)
 
-    def stop(self, testId, browser_id=None):
+    def stop(self, testId: Union[int, str], browser_id: Optional[Union[int, str]] = None) -> Any:
         """Force-stop a running Codeless test (optionally a single browser)."""
         body = {}
         if browser_id is not None:
             body['browser_id'] = browser_id
-        return self.client.put('/lab/%s/stop' % testId, json_body=body)
+        return self.client.put('/lab/%s/stop' % _seg(testId), json_body=body)
 
-    def get_browsers(self, testId):
+    def get_browsers(self, testId: Union[int, str]) -> Any:
         """Get the browsers a Codeless test runs on."""
-        return self.client.get('/lab/%s/browsers' % testId)
+        return self.client.get('/lab/%s/browsers' % _seg(testId))
 
-    def set_browsers(self, testId, browser_ids):
+    def set_browsers(self, testId: Union[int, str], browser_ids: Union[list, str]) -> Any:
         """Replace the browser set for a Codeless test (list or comma string)."""
-        return self.client.post('/lab/%s/browsers' % testId, json_body={'browser_ids': _csv(browser_ids)})
+        return self.client.post('/lab/%s/browsers' % _seg(testId), json_body={'browser_ids': _csv(browser_ids)})
 
 
 class Configuration(object):
-    def __init__(self, client):
+    def __init__(self, client: TestingBotClient):
         self.client = client
 
-    def get_ip_ranges(self):
+    def get_ip_ranges(self) -> Any:
         """Get TestingBot's public IPv4 addresses (for firewall whitelisting)."""
         return self.client.get('/configuration/ip-ranges')
