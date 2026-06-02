@@ -40,11 +40,18 @@ class TestTestingBotClient(unittest.TestCase):
             self.fail('ExpectedException not raised')
 
     def test_get_tests(self):
-        test_meta = self.tb.tests.get_tests(0, 6)
-        self.assertEqual(len(test_meta), 6)
+        # The API returns at most `limit` tests; the exact count depends on how
+        # many tests the account has, so assert the limit is an upper bound
+        # rather than a fixed count.
+        page = self.tb.tests.get_tests(0, 6)
+        self.assertIsInstance(page, list)
+        self.assertLessEqual(len(page), 6)
 
-        test_meta = self.tb.tests.get_tests()
-        self.assertEqual(len(test_meta), 10)
+        self.assertLessEqual(len(self.tb.tests.get_tests()), 10)  # default limit
+
+        # If the account actually has enough tests, the limit must be applied.
+        if len(self.tb.tests.get_tests(0, 50)) >= 6:
+            self.assertEqual(len(page), 6)
 
     def test_update_test(self):
         tests = self.tb.tests.get_tests(0, 1)
