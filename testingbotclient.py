@@ -12,6 +12,14 @@ class TestingBotException(Exception):
     def __init__(self, *args, **kwargs):
         super(TestingBotException, self).__init__(*args)
         self.response = kwargs.get('response')
+        # Strip the Basic-auth header from the retained response: anything that
+        # logs or prints the exception's .response (e.g. e.response.request.headers)
+        # would otherwise expose the API key and secret.
+        if self.response is not None:
+            request = getattr(self.response, 'request', None)
+            headers = getattr(request, 'headers', None)
+            if headers is not None:
+                headers.pop('Authorization', None)
 
 class TestingBotClient(object):
     def __init__(self, testingbotKey=None, testingbotSecret=None, timeout=60):
