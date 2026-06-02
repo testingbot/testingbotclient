@@ -129,11 +129,15 @@ class Storage(object):
     def upload_local_file(self, filepath):
         """Uploads a local file to TestingBot Storage."""
         with open(filepath, 'rb') as f:
-            return requests.post(
+            response = requests.post(
                 self.client.api_url + "/storage",
                 files={'file': f},
                 auth=(self.client.testingbotKey, self.client.testingbotSecret)
-            ).json()
+            )
+        if response.status_code not in [200, 201]:
+            raise TestingBotException('{}: {}.\nTestingBot API Error'.format(
+                response.status_code, response.text), response=response)
+        return response.json()
 
     def upload_remote_file(self, remoteUrl):
         return self.client.post("/storage", { 'url': remoteUrl })
