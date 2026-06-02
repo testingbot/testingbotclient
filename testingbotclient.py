@@ -119,7 +119,7 @@ class Tests(object):
     def stop_test(self, sessionId):
         """Stops a test."""
         url = '/tests/%s/stop' % sessionId
-        response = self.client.put(url)
+        response = self.client.put(url, {})
         return response['success']
 
 class Storage(object):
