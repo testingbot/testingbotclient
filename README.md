@@ -233,8 +233,16 @@ testingbotclient.get_share_link(sessionId)
 
 ## Test
 
-```python
-python tests/test_client.py
+Unit tests are mocked and need no credentials:
+
+```shell
+python -m unittest tests.test_unit
+```
+
+The live integration tests hit the real API and require `TB_KEY` and `TB_SECRET`:
+
+```shell
+python -m unittest tests.test_client
 ```
 
 ## More documentation
