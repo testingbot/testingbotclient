@@ -226,9 +226,17 @@ class Tests(object):
         return self.client.get(url)
 
     def create_test(self, name: str, success: Optional[bool] = None, status_message: Optional[str] = None,
-                    extra: Optional[str] = None, build: Optional[str] = None) -> Any:
-        """Create a test record (for logging manual or external test results)."""
+                    extra: Optional[str] = None, build: Optional[str] = None,
+                    test_environment_id: Optional[Union[int, str]] = None) -> Any:
+        """Create a test record (for logging manual or external test results).
+
+        test_environment_id: the ``browser_id`` of the browser/device (from
+        ``tb.information.get_browsers()``) the test ran on. The API rejects
+        the request without it.
+        """
         test = {'name': name}
+        if test_environment_id is not None:
+            test['test_environment_id'] = test_environment_id
         if success is not None:
             test['success'] = success
         if status_message is not None:
