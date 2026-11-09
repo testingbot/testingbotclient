@@ -259,6 +259,14 @@ class TestTests(ClientTestCase):
             'status_message': 'm', 'build': 'b1'}})
         self.assertEqual(out, {'success': True})
 
+    def test_create_test_with_environment(self):
+        self.queue(200, {'success': True})
+        self.client.tests.create_test('manual run', success=True,
+                                      test_environment_id=1)
+        self.assertCall('POST', '/tests', json_body={'test': {
+            'name': 'manual run', 'test_environment_id': 1,
+            'success': True}})
+
     def test_update_test_pass(self):
         self.queue(200, {'success': True})
         ok = self.client.tests.update_test('s', name='n', passed=True,

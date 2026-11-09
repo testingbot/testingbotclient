@@ -85,8 +85,10 @@ tb.tests.stop_test(sessionId)
 tb.tests.delete_test(sessionId)
 
 # Create a record for a manual / external test result
-tb.tests.create_test(name, success=None, status_message=None,
-                     extra=None, build=None)
+tb.tests.create_test(name, test_environment_id=browserId, success=None,
+                     status_message=None, extra=None, build=None)
+# test_environment_id is required by the API: the `browser_id` of the browser/device
+# the test ran on, from tb.information.get_browsers()
 ```
 
 ## Builds — `tb.build`
